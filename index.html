@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quiz Game: Arduino IR & LED</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Poppins:wght@400;600;800&display=swap');
+        
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #312e81 100%);
+            color: white;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .pixel-font { font-family: 'Press Start 2P', cursive; }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+
+        .btn-game {
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+            font-weight: 800;
+            letter-spacing: 1px;
+        }
+        .btn-game:hover {
+            transform: translateY(-3px) scale(1.02);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.4);
+        }
+        .btn-game:active {
+            transform: translateY(1px);
+        }
+
+        .emoji-gambar {
+            filter: drop-shadow(0px 10px 10px rgba(0,0,0,0.5));
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-15px); }
+            100% { transform: translateY(0px); }
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-10px); }
+            50% { transform: translateX(10px); }
+            75% { transform: translateX(-10px); }
+        }
+        .shake-anim { animation: shake 0.4s ease-in-out; }
+
+        .correct-anim { background-color: #22c55e !important; color: white !important; border-color: #16a34a !important; }
+        .wrong-anim { background-color: #ef4444 !important; color: white !important; border-color: #dc2626 !important; }
+    </style>
+</head>
+<body class="flex items-center justify-center p-4">
+
+    <!-- Screen 1: Welcome -->
+    <div id="screen-welcome" class="glass-panel rounded-3xl p-8 max-w-lg w-full text-center flex flex-col items-center gap-6">
+        <div class="text-6xl mb-2">🎮</div>
+        <h1 class="text-3xl md:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500">
+            ARDUINO WOKWI QUIZ
+        </h1>
+        <p class="text-gray-300">Uji logika lo tentang Remote Infrared & LED! Selesaiin 10 Misi, kumpulin XP, dan buktiin lo bukan noob.</p>
+        <button onclick="showScreen('screen-name')" class="btn-game mt-4 bg-gradient-to-r from-blue-500 to-cyan-400 text-white py-4 px-10 rounded-full w-full text-xl">
+            START GAME
+        </button>
+    </div>
+
+    <!-- Screen 2: Input Name -->
+    <div id="screen-name" class="glass-panel rounded-3xl p-8 max-w-lg w-full text-center hidden flex-col items-center gap-6">
+        <h2 class="text-2xl font-bold">Siapa Nama Lo?</h2>
+        <div class="text-5xl mb-2">👾</div>
+        <input type="text" id="playerNameInput" placeholder="Ketik nama player..." class="w-full bg-black/30 border border-blue-400/50 rounded-xl px-6 py-4 text-white text-center text-xl focus:outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400 transition-all">
+        <button onclick="startGame()" class="btn-game bg-gradient-to-r from-green-500 to-emerald-400 text-white py-4 px-10 rounded-full w-full text-xl">
+            Lanjut!
+        </button>
+    </div>
+
+    <!-- Screen 3: Game -->
+    <div id="screen-game" class="glass-panel rounded-3xl p-6 md:p-8 max-w-2xl w-full hidden flex-col relative overflow-hidden">
+        
+        <!-- Header Game: Info & Stats -->
+        <div class="flex justify-between items-center mb-6 bg-black/20 p-4 rounded-2xl">
+            <div>
+                <p class="text-sm text-cyan-300 font-bold uppercase tracking-wider" id="player-display-name">Player</p>
+                <h3 class="text-xl font-extrabold" id="mission-title">MISI 1 / 10</h3>
+            </div>
+            <div class="text-right">
+                <p class="text-sm text-yellow-400 font-bold">XP Points</p>
+                <div class="flex items-center gap-2 justify-end">
+                    <span class="text-2xl font-extrabold pixel-font text-yellow-300" id="xp-counter">0</span>
+                    <span class="text-yellow-400 text-xl">⭐</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Progress Bar Misi -->
+        <div class="w-full bg-gray-700 h-2 rounded-full mb-8 overflow-hidden">
+            <div id="progress-bar" class="bg-gradient-to-r from-cyan-400 to-blue-500 h-full rounded-full transition-all duration-300" style="width: 0%;"></div>
+        </div>
+
+        <!-- Kuis Area -->
+        <div class="flex flex-col items-center text-center">
+            <div class="text-sm text-gray-400 mb-2 font-bold bg-black/30 px-4 py-1 rounded-full">KUIS <span id="quiz-counter">1</span>/5</div>
+            
+            <!-- Tebak Gambar Area (Emoji Representation) -->
+            <div class="h-32 flex items-center justify-center mb-4">
+                <div id="quiz-image" class="text-7xl md:text-8xl emoji-gambar">📡</div>
+            </div>
+            
+            <h2 id="quiz-question" class="text-xl md:text-2xl font-semibold mb-8 min-h-[80px] flex items-center justify-center">
+                Pertanyaan muncul di sini?
+            </h2>
+
+            <!-- Options -->
+            <div id="options-container" class="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
+                <!-- Buttons injected by JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Screen 4: Result -->
+    <div id="screen-result" class="glass-panel rounded-3xl p-8 max-w-lg w-full text-center hidden flex-col items-center gap-6">
+        <h1 class="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-500">
+            MISSION CLEARED!
+        </h1>
+        <div class="text-7xl my-4">🏆</div>
+        <h2 class="text-2xl font-bold" id="final-name">Player</h2>
+        <div class="bg-black/30 p-6 rounded-2xl w-full border border-yellow-500/30">
+            <p class="text-gray-300 text-sm mb-2">Total XP yang didapat:</p>
+            <p class="text-5xl font-extrabold pixel-font text-yellow-400" id="final-xp">0</p>
+        </div>
+        <p class="text-gray-300 italic" id="feedback-text">"GGWP! Logika lo jalan juga ternyata."</p>
+        <button onclick="location.reload()" class="btn-game mt-4 bg-gradient-to-r from-blue-500 to-cyan-400 text-white py-4 px-10 rounded-full w-full text-xl">
+            MAIN LAGI
+        </button>
+    </div>
+
+    <script>
+        // --- DATA SOAL DARI DOKUMEN (50 Soal = 10 Misi x 5 Kuis) ---
+        // Gambar direpresentasikan dengan Emoji agar sesuai batasan aset teks
+        const masterQuestions = [
+            // MISI 1: Dasar Remote & IR (1-5)
+            { img: "📱", q: "Alat pengendali jarak jauh yang menggunakan sinar inframerah disebut...", a: "Remote Infrared", opt: ["Remote Bluetooth", "Remote Radio", "Remote WiFi", "Remote Infrared"] },
+            { img: "👁️", q: "Apakah sinar infrared dari remote bisa dilihat langsung oleh mata manusia?", a: "Tidak bisa", opt: ["Bisa banget", "Hanya siang hari", "Tidak bisa", "Berwarna merah muda"] },
+            { img: "📺", q: "Berikut ini adalah contoh penggunaan remote infrared di kehidupan sehari-hari, kecuali...", a: "Remote Drone", opt: ["Remote TV", "Remote AC", "Remote Drone", "Remote DVD"] },
+            { img: "📡", q: "Bagaimana cara kerja remote infrared mengirim perintah?", a: "Mengirim sinyal cahaya digital", opt: ["Memancarkan gelombang radio", "Mengirim sinyal cahaya digital", "Menggunakan kabel tembaga", "Menyambung lewat Bluetooth"] },
+            { img: "💡", q: "Dalam projek ini, remote digunakan khusus untuk apa?", a: "Mengontrol LED", opt: ["Mengontrol AC", "Mengontrol Suhu", "Mengontrol LED", "Menyalakan Motor DC"] },
+            
+            // MISI 2: Cara Kerja Remote (6-10)
+            { img: "👇", q: "Apa langkah pertama dalam cara kerja sederhana remote IR?", a: "Tombol remote ditekan", opt: ["Arduino memproses data", "IR Receiver menerima sinyal", "Tombol remote ditekan", "LED menyala"] },
+            { img: "〰️", q: "Setelah tombol ditekan, remote mengirimkan apa?", a: "Sinyal infrared", opt: ["Sinyal infrared", "Arus listrik 5V", "Sinyal WiFi", "Pesan teks"] },
+            { img: "📥", q: "Siapa yang bertugas menangkap sinyal infrared dari remote?", a: "IR Receiver", opt: ["LED", "IR Receiver", "Arduino", "Resistor"] },
+            { img: "🧠", q: "Komponen yang bertugas memproses data yang diterima dari sensor adalah...", a: "Arduino", opt: ["Remote", "Resistor", "Arduino", "LED"] },
+            { img: "✨", q: "Langkah terakhir dari alur sistem ini adalah...", a: "Arduino memberi perintah ke LED", opt: ["LED memancarkan infrared", "Arduino memberi perintah ke LED", "Remote menerima sinyal", "IR receiver mati"] },
+
+            // MISI 3: Mengenal IR Receiver (11-15)
+            { img: "👀", q: "IR Receiver berfungsi untuk menerima sinyal dan mengubahnya menjadi...", a: "Data digital", opt: ["Data analog", "Data digital", "Gelombang radio", "Energi panas"] },
+            { img: "🔌", q: "IR Receiver termasuk ke dalam jenis perangkat apa?", a: "Input device", opt: ["Output device", "Storage device", "Input device", "Processing unit"] },
+            { img: "🔢", q: "Berapa jumlah pin yang biasanya terdapat pada IR Receiver?", a: "3 Pin", opt: ["2 Pin", "3 Pin", "4 Pin", "5 Pin"] },
+            { img: "⚡", q: "Pin VCC pada IR Receiver dihubungkan ke tegangan berapa pada Arduino?", a: "5V", opt: ["3.3V", "5V", "9V", "12V"] },
+            { img: "🌍", q: "Pin GND pada IR Receiver dihubungkan ke mana?", a: "Ground", opt: ["Ground", "Pin 2", "Pin 5V", "Pin Analog"] },
+
+            // MISI 4: Wiring & Koneksi (16-20)
+            { img: "📤", q: "Pin OUT (Data) pada IR Receiver dihubungkan ke pin mana di Arduino berdasarkan tabel?", a: "Pin 2", opt: ["Pin 2", "Pin 3", "Pin GND", "Pin 5"] },
+            { img: "➕", q: "Kaki positif (+) pada LED dihubungkan ke pin berapa?", a: "Pin 3", opt: ["Pin 2", "Pin 3", "Pin GND", "Pin 5V"] },
+            { img: "➖", q: "Kaki negatif (-) LED dihubungkan ke Ground melewati komponen apa?", a: "Resistor", opt: ["Kapasitor", "Induktor", "Resistor", "Transistor"] },
+            { img: "🔋", q: "Berapa nilai Resistor yang digunakan untuk LED dalam projek ini?", a: "220Ω", opt: ["10kΩ", "1kΩ", "220Ω", "100kΩ"] },
+            { img: "🧵", q: "Kabel yang digunakan untuk menghubungkan komponen di breadboard/Wokwi disebut?", a: "Kabel Jumper", opt: ["Kabel UTP", "Kabel Jumper", "Kabel USB", "Kabel Fiber"] },
+
+            // MISI 5: Simulator Wokwi (21-25)
+            { img: "🌐", q: "Website apa yang digunakan untuk simulasi projek ini?", a: "wokwi.com", opt: ["tinkercad.com", "wokwi.com", "arduino.cc", "github.com"] },
+            { img: "🖱️", q: "Menu apa yang dipilih pertama kali saat membuat projek baru di Wokwi?", a: "New Project -> Arduino Uno", opt: ["New Project -> ESP32", "New Project -> Arduino Uno", "Load Template", "Open File"] },
+            { img: "🧩", q: "Komponen berikut ini harus ditambahkan ke Wokwi, kecuali...", a: "Motor Servo", opt: ["Arduino Uno", "IR Receiver", "LED", "Motor Servo"] },
+            { img: "📦", q: "Library apa yang perlu di-install (via PlatformIO/Wokwi) untuk membaca remote?", a: "IRremote", opt: ["LiquidCrystal", "IRremote", "Servo", "DHTSensor"] },
+            { img: "👨‍💻", q: "Siapa pembuat library IRremote yang disarankan di dokumen?", a: "Armin Joachimsmeyer", opt: ["Adafruit", "Arduino LLC", "Armin Joachimsmeyer", "Blynk"] },
+
+            // MISI 6: Kode Program - Persiapan (26-30)
+            { img: "📜", q: "Perintah '#include <IRremote.hpp>' berfungsi untuk?", a: "Memasukkan library", opt: ["Mendeklarasikan variabel", "Memasukkan library", "Menyalakan Arduino", "Menghapus kode"] },
+            { img: "📌", q: "Sesuai kode, 'const int RECV_PIN = 2;' artinya pin data IR ada di...", a: "Pin digital 2", opt: ["Pin analog 2", "Pin digital 2", "Pin 5V", "Pin GND"] },
+            { img: "🔴", q: "Sesuai kode, LED_PIN dikontrol pakai tombol remote angka berapa?", a: "1", opt: ["1", "2", "Power", "Menu"] },
+            { img: "🟢", q: "LED_PIN_2 dihubungkan ke pin berapa pada kode yang ada?", a: "4", opt: ["2", "3", "4", "5"] },
+            { img: "🔤", q: "Tipe data 'bool' pada variabel 'ledState' hanya bisa menyimpan nilai...", a: "True / False", opt: ["Angka bulat", "Teks", "True / False", "Koma (desimal)"] },
+
+            // MISI 7: Kode Program - Setup (31-35)
+            { img: "🖥️", q: "Fungsi 'Serial.begin(9600);' adalah untuk...", a: "Mengaktifkan serial monitor", opt: ["Mengaktifkan sensor IR", "Mengaktifkan serial monitor", "Menyalakan LED", "Mematikan program"] },
+            { img: "⏳", q: "Perintah 'delay(200);' akan membuat program berhenti sejenak selama...", a: "200 milidetik", opt: ["200 detik", "20 milidetik", "200 milidetik", "2 detik"] },
+            { img: "🛠️", q: "Fungsi dari 'IrReceiver.begin()' adalah untuk...", a: "Mengaktifkan IR receiver", opt: ["Mematikan receiver", "Membaca data", "Mengaktifkan IR receiver", "Menghapus memori"] },
+            { img: "🚪", q: "Pada 'pinMode(LED_PIN, OUTPUT)', LED diatur sebagai...", a: "Output", opt: ["Input", "Output", "Sensor", "Prosesor"] },
+            { img: "🌑", q: "Perintah 'digitalWrite(LED_PIN, LOW);' di setup() membuat LED awalnya...", a: "Mati", opt: ["Menyala terang", "Mati", "Berkedip", "Redup"] },
+
+            // MISI 8: Kode Program - Loop & Logika (36-40)
+            { img: "🔁", q: "Fungsi 'if (IrReceiver.decode())' bertugas untuk...", a: "Mengecek jika ada sinyal masuk", opt: ["Mengecek jika ada sinyal masuk", "Mereset Arduino", "Menghitung jumlah klik", "Menyalakan semua LED"] },
+            { img: "🔍", q: "Perintah 'IrReceiver.decodedIRData.command' berguna untuk...", a: "Mengambil data kode tombol", opt: ["Mengambil data suhu", "Mengambil data kode tombol", "Mengubah warna LED", "Membuat suara"] },
+            { img: "🖨️", q: "Jika kita ingin melihat data yang ditangkap di layar PC, kita gunakan...", a: "Serial.println()", opt: ["digitalWrite()", "Serial.println()", "analogRead()", "delay()"] },
+            { img: "▶️", q: "Agar sensor siap menerima sinyal berikutnya, perintah apa yang dipanggil di akhir?", a: "IrReceiver.resume()", opt: ["IrReceiver.stop()", "IrReceiver.resume()", "IrReceiver.restart()", "IrReceiver.play()"] },
+            { img: "⏱️", q: "Berapa lama jeda (delay) saat membuat LED berkedip di contoh kode?", a: "300 ms", opt: ["1000 ms", "500 ms", "300 ms", "100 ms"] },
+
+            // MISI 9: Fungsi Tombol Remote (Tabel) (41-45)
+            { img: "🔌", q: "Berdasarkan tabel, Tombol 'Power' mengirimkan kode angka...", a: "162", opt: ["162", "226", "34", "48"] },
+            { img: "📑", q: "Tombol 'Menu' menghasilkan kode 226, fungsinya untuk...", a: "Tampilkan petunjuk", opt: ["LED mati", "Tampilkan petunjuk", "LED nyala", "LED kedip"] },
+            { img: "🧪", q: "Tombol 'Test' dengan kode 34 digunakan untuk...", a: "LED nyala", opt: ["LED mati", "Tampilkan petunjuk", "LED nyala", "LED kedip"] },
+            { img: "1️⃣", q: "Tombol angka '1' (kode 48 atau 0x30) digunakan untuk membuat LED...", a: "Kedip", opt: ["Mati total", "Nyala terus", "Kedip", "Redup"] },
+            { img: "0️⃣", q: "Format '0x30' dalam kode program adalah penulisan bilangan berbasis...", a: "Hexadecimal", opt: ["Desimal", "Biner", "Hexadecimal", "Oktal"] },
+
+            // MISI 10: Konsep Informatika & Tugas (46-50)
+            { img: "🧠", q: "Penggunaan 'if' dalam program merupakan konsep dari...", a: "Percabangan", opt: ["Perulangan", "Percabangan", "Variabel", "Tipe Data"] },
+            { img: "📦", q: "Tempat menyimpan nilai sementara di memori disebut...", a: "Variabel", opt: ["Variabel", "Library", "Fungsi", "Sintaks"] },
+            { img: "🎯", q: "IR Receiver merupakan konsep dari...", a: "Input Device", opt: ["Output Device", "Storage", "Input Device", "Brainware"] },
+            { img: "💡", q: "LED merupakan representasi dari konsep...", a: "Output Device", opt: ["Input Device", "Output Device", "Memori", "Sistem Operasi"] },
+            { img: "🚀", q: "Tugas pengembangan untuk tombol 2 adalah membuat LED...", a: "Kedip cepat", opt: ["Nyala 3 detik", "Kedip lambat", "Kedip cepat", "Mati perlahan"] }
+        ];
+
+        // --- GAME LOGIC ---
+        let playerName = "";
+        let currentMission = 0;
+        let currentQuiz = 0;
+        let xp = 0;
+        let missions = [];
+
+        function initMissions() {
+            // Pecah 50 soal jadi 10 misi, tiap misi 5 kuis
+            missions = [];
+            for (let i = 0; i < 10; i++) {
+                missions.push(masterQuestions.slice(i * 5, (i + 1) * 5));
+            }
+        }
+
+        function showScreen(screenId) {
+            document.querySelectorAll('body > div').forEach(div => div.classList.add('hidden'));
+            document.getElementById(screenId).classList.remove('hidden');
+            document.getElementById(screenId).classList.add('flex');
+        }
+
+        function startGame() {
+            const input = document.getElementById('playerNameInput').value.trim();
+            if (!input) {
+                document.getElementById('playerNameInput').classList.add('shake-anim');
+                setTimeout(() => document.getElementById('playerNameInput').classList.remove('shake-anim'), 400);
+                return;
+            }
+            playerName = input;
+            document.getElementById('player-display-name').innerText = playerName;
+            
+            initMissions();
+            currentMission = 0;
+            currentQuiz = 0;
+            xp = 0;
+            updateXP(0);
+            
+            loadQuiz();
+            showScreen('screen-game');
+        }
+
+        // Fisher-Yates Shuffle buat ngacak opsi jawaban
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        function loadQuiz() {
+            const currentQuestion = missions[currentMission][currentQuiz];
+            
+            document.getElementById('mission-title').innerText = `MISI ${currentMission + 1} / 10`;
+            document.getElementById('quiz-counter').innerText = currentQuiz + 1;
+            document.getElementById('quiz-image').innerText = currentQuestion.img;
+            document.getElementById('quiz-question').innerText = currentQuestion.q;
+            
+            // Progress bar update
+            const totalProgress = ((currentMission * 5) + currentQuiz) / 50 * 100;
+            document.getElementById('progress-bar').style.width = `${totalProgress}%`;
+
+            const optionsContainer = document.getElementById('options-container');
+            optionsContainer.innerHTML = '';
+
+            let options = [...currentQuestion.opt];
+            options = shuffleArray(options);
+
+            options.forEach(optText => {
+                const btn = document.createElement('button');
+                btn.className = "p-4 bg-black/40 border border-blue-400/30 rounded-xl font-bold text-sm md:text-base hover:bg-blue-600/50 transition-all text-white focus:outline-none";
+                btn.innerText = optText;
+                btn.onclick = () => checkAnswer(btn, optText === currentQuestion.a);
+                optionsContainer.appendChild(btn);
+            });
+        }
+
+        function checkAnswer(btnElement, isCorrect) {
+            // Disable all buttons biar gak spam klik
+            const allBtns = document.getElementById('options-container').querySelectorAll('button');
+            allBtns.forEach(b => b.disabled = true);
+
+            if (isCorrect) {
+                btnElement.classList.add('correct-anim');
+                updateXP(20); // 20 XP per jawaban bener (Total max 1000 XP)
+            } else {
+                btnElement.classList.add('wrong-anim', 'shake-anim');
+                // Tunjukin jawaban bener
+                allBtns.forEach(b => {
+                    if (b.innerText === missions[currentMission][currentQuiz].a) {
+                        b.classList.add('border-green-500', 'text-green-400');
+                    }
+                });
+            }
+
+            setTimeout(nextQuiz, 1000);
+        }
+
+        function updateXP(amount) {
+            xp += amount;
+            const xpEl = document.getElementById('xp-counter');
+            xpEl.innerText = xp;
+            xpEl.classList.add('scale-125', 'text-white');
+            setTimeout(() => xpEl.classList.remove('scale-125', 'text-white'), 200);
+        }
+
+        function nextQuiz() {
+            currentQuiz++;
+            if (currentQuiz >= 5) {
+                currentQuiz = 0;
+                currentMission++;
+            }
+
+            if (currentMission >= 10) {
+                endGame();
+            } else {
+                loadQuiz();
+            }
+        }
+
+        function endGame() {
+            document.getElementById('final-name').innerText = playerName;
+            document.getElementById('final-xp').innerText = xp;
+            
+            let feedback = "";
+            if (xp === 1000) feedback = "PERFECT SCORE! Nerd sejati lu, fix.";
+            else if (xp >= 700) feedback = "Not bad! Logika lo udah mantep, bro.";
+            else if (xp >= 400) feedback = "Lumayan, tapi coba baca ulang dokumennya deh.";
+            else feedback = "Bro... lo pas simulasi tidur ya? Wkwk.";
+            
+            document.getElementById('feedback-text').innerText = feedback;
+            showScreen('screen-result');
+        }
+
+        // Show welcome on load
+        showScreen('screen-welcome');
+    </script>
+</body>
+</html>
